@@ -19,39 +19,57 @@
     <meta name="x5-page-mode" content="app">
     <base target="_blank">
     <title>会话_</title>
-    <link href="bootstrap.min.css" rel="stylesheet" type="text/css" />
+    <!-- <link href="bootstrap.min.css" rel="stylesheet" type="text/css" /> -->
+    <link href="bootstrap-3.3.7/bootstrap.css" rel="stylesheet" type="text/css" />
     <link rel="stylesheet" href="chat.css">
-    <script src="http://libs.baidu.com/jquery/2.0.0/jquery.min.js"></script>
+    <!-- <script src="http://libs.baidu.com/jquery/2.0.0/jquery.min.js"></script> -->
+    <script src="js/jquery-3.4.1.js"></script>
+    <script src="js/dexie.js"></script>
+    <script src="js/parse.js"></script>
+    <script src="js/db.js"></script>
     <script src="chat.js"></script>
+
 </head>
 <body lang="zh">
-    <img style="width:100%;height:100%" src="http://p17.qhimg.com/bdr/__85/t016dc185d1fe8f7d2c.jpg">
+    <img style="width:100%;height:100%" src="./image/background1.jpg">
     <div class="abs cover contaniner">
         <div class="abs cover pnl">
-            <div class="top pnl-head"></div>
+            <div class="top pnl-head">
+                <tr>
+                    <td>
+                        <img style="height:100%" src="http://p.qlogo.cn/gh/320762705/320762705/100">
+                    </td>
+                    <td>
+                        <li id="chat_title"></li>
+                    </td>
+                </tr>
+            </div>
             <div class="abs cover pnl-body" id="pnlBody">
-                <div class="abs cover pnl-left">
-                    <div class="abs cover pnl-msgs scroll" id="show">
+                <div class="abs cover pnl-left", id="pnl_left">
+                    <div class="abs cover pnl-msgs scroll" id="pnl_show">
                         <div class="msg min time" id="histStart">加载历史消息</div>
                         <div class="pnl-list" id="hists">
                             <!-- 历史消息 -->
                         </div>
                         <div class="pnl-list" id="msgs">
-                            <div class="msg robot">
-                                <div class="msg-left" worker="小龙">
-                                    <div class="msg-host photo" style="background-image: url(../Images/head.png)"></div>
-                                    <div class="msg-ball" title="今天 17:52:06">你好，我是机器人小龙                <br><br>您是想要了解哪些方面呢？</div>
+
+                            <div class="msg robot" id="msg_robot" hidden>
+                                <div class="msg-left" user-remark="">
+                                    <div class="msg-host photo" style="background-image: url(image/head.jpg)"></div>
+                                    <div class="msg-ball" title="title"> hello </div>
                                 </div>
                             </div>
-                            <div class="msg guest">
+
+                            <div class="msg guest" id="msg_guest" hidden>
                                 <div class="msg-right">
                                     <div class="msg-host headDefault"></div>
-                                    <div class="msg-ball" title="今天 17:52:06">你好</div>
+                                    <div class="msg-ball" title="">你好</div>
                                 </div>
                             </div>
+                            <div></div>
                         </div>
-                        <div class="pnl-list hide" id="unreadLine">
-                            <div class="msg min time unread">未读消息</div>
+                        <div class="pnl-list" id="msgs_unread">
+                            <div class="msg min time unread hide">未读消息</div>
                         </div>
                     </div>
                     <div class="abs bottom pnl-text">
@@ -73,18 +91,19 @@
                 <div class="abs right pnl-right">
                     <div class="slider-container hide"></div>
                     <div class="pnl-right-content">
-                        <div class="pnl-tabs">
-                            <div class="tab-btn active" id="hot-tab">常见问题</div>
-                            <div class="tab-btn" id="rel-tab">相关问题</div>
+                        <div class="pnl-tabs", id="pnl-tabs">
+                            <div class="tab-btn active" id="contact_tab_chat">会话</div>
+                            <div class="tab-btn" id="contact_tab_friends">好友</div>
+                            <div class="tab-btn" id="contact_tab_groups">群组</div>
                         </div>
                         <div class="pnl-hot">
-                            <ul class="rel-list unselect" id="hots">
-                               <li class="rel-item">这里是相关问题</li> 
+                            <ul class="rel-list unselect" id="contact_list">
+                               <li class="rel-item"><a class ="badge"></a></li> 
                             </ul>
                         </div>
                         <div class="pnl-rel" style="display: none;">
                             <ul class="rel-list unselect" id="rels">
-                                 <li class="rel-item">这里是相关问题</li> 
+                                 <li class="rel-item"></li> 
                             </ul>
                         </div>
                     </div>

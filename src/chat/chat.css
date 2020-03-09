@@ -250,6 +250,11 @@ video {
 	-ms-animation:blink 5s linear;
 	animation:blink 5s linear
 }
+.badge {
+	/*background-color: #fb7a7a;/*red*/
+	background-color: #92e294;/*green*/
+	float:right;
+}
 @-moz-keyframes blink {
 	from {
 	opacity:1;
@@ -1716,7 +1721,7 @@ to {
 	background-image:url("../lib/files/images/btns/refresh_5abc4fd673.png")
 }
 *::-webkit-scrollbar {
-	width:3px;
+	width:8px;
 	margin-left:-3px;
 	background-color:transparent
 }
@@ -1921,7 +1926,7 @@ body {
 	z-index:100000;
 	overflow:auto;
 	padding:.5em 0 1.5em .3em;
-	background:#fff;
+	background:rgba(255,255,255,0.8);
 }
 .msg-banner {
 	position:absolute;
@@ -2317,6 +2322,10 @@ a {
 	position:relative;
 	overflow:hidden
 }
+.msg-img {
+	max-width:400px;
+	max-height:400px
+}
 .msg-ico {
 	position:absolute;
 	top:.5em;
@@ -2597,7 +2606,7 @@ a {
 	padding-left:1.5em;
 }
 .rel-list::-webkit-scrollbar {
-	width:2px;
+	width:8px;
 	margin-left:-2px
 }
 .rel-item {
@@ -2782,7 +2791,7 @@ a {
 	border-width:.4em .6em .4em 0
 }
 .msg-left:before {
-	content:attr(worker);
+	content:attr(user-remark);
 	display:block;
 	color:#848484;
 	margin-bottom:-.5em;
@@ -3037,9 +3046,9 @@ body.phone .media-container,body.ifr .media-container {
 .pnl {
 	text-align:left;
 	margin:auto;
-	max-width:900px;
-	max-height:700px;
-	width:900px;
+	max-width:16000px;
+	max-height:1080px;
+	width:1200px;
 	border-radius:.5em;
 	overflow:hidden;
 	-webkit-box-shadow:0 0 8px 0 rgba(33,101,129,0.4);
@@ -3153,7 +3162,7 @@ body.phone .media-container,body.ifr .media-container {
 }
 .pnl-left {
 	right:0 !important;
-	background-color:#fff;
+	
 	-webkit-transition:all 0.3s ease;
 	-moz-transition:all 0.3s ease;
 	-o-transition:all 0.3s ease;
@@ -3161,7 +3170,7 @@ body.phone .media-container,body.ifr .media-container {
 	transition:all 0.3s ease
 }
 .pnl-msgs {
-	background-color:#fff;
+	background: rgba(255,255,255,0.8);
 	bottom:3.3em !important;
 	padding:.3em .3em 1em .3em;
 	border-bottom:0 solid #ddd
@@ -3529,7 +3538,7 @@ body.phone .pnl-left {
 	transition:all 0.3s ease
 }
 body.phone .pnl-msgs {
-	background-color:#fff;
+	background: rgba(255,255,255,0.8);
 	bottom:3.3em !important;
 	padding:.3em .3em 1em .3em;
 	border-bottom:0 solid #ddd
@@ -3772,7 +3781,7 @@ body.ifr:not(.phone) .pnl-body .pnl-left {
 }
 body.ifr:not(.phone) .pnl-body .pnl-msgs {
 	bottom:9.1em !important;
-	background-color:#fff !important;
+	background: rgba(255,255,255,0.8); !important;
 	border:0;
 	padding:.3em .8em 1em .8em;
 }
