@@ -13,7 +13,7 @@ var g_curr_seccion = { //当前会话
 //创建新的webSocket连接
 function SocketRequest(url, option, forever = false, getResponse = function(res){}){
     return new Promise( (resolve) =>{
-        var socket = new WebSocket(url);
+        let socket = new WebSocket(url);
         socket.onopen = function(){
             socket.send(JSON.stringify(option));
         }
@@ -51,9 +51,6 @@ $(document).ready( function(){
         await OpenDB("QQ_" + String(g_my_account));
         Init();
     });
-
-    initMouseListener();
-
 });
 
 //监听刷新和关闭事件
@@ -63,11 +60,15 @@ window.onbeforeunload = function(){
 
 ///////////////////////////////////////////////////////////////////////////////////
 //初始化
-function Init(){
+async function Init(){
+
+    ShowChatList();
+    initMouseListener();
+
     var url = g_ws_host + "/api/"
     //获取分组好友
     option = {"action":"_get_friend_list"}
-    SocketRequest(url, option, false, function(event){
+    await SocketRequest(url, option, false, function(event){
         var res = JSON.parse(event.data);
         if(res.status == "ok")
             QQ_db.friend_group_list.bulkPut(res.data).catch(Dexie.BulkError, function (e) {
@@ -79,7 +80,7 @@ function Init(){
 
     //获取所有好友
     option = {"action":"get_friend_list"}
-    SocketRequest(url, option, false, function(event){
+    await SocketRequest(url, option, false, function(event){
         var res = JSON.parse(event.data);
         if(res.status == "ok")
             QQ_db.friend_list.bulkPut(res.data).catch(Dexie.BulkError, function (e) {
@@ -91,7 +92,7 @@ function Init(){
 
     //获取群组
     option = {"action":"get_group_list"}
-    SocketRequest(url, option, false, function(event){
+    await SocketRequest(url, option, false, function(event){
         var res = JSON.parse(event.data);
         if(res.status == "ok"){
              //获取所有群组的群成员
@@ -110,13 +111,11 @@ function Init(){
 
     //监听消息事件,获取消息
     url = g_ws_host + '/event/';
-    SocketRequest(url, "", true, function(event){
+    await SocketRequest(url, "", true, function(event){
         OnEvent(JSON.parse(event.data))
     });
 
     initPropChangeListener();
-
-    ShowChatList();
 
 }
 
@@ -125,8 +124,8 @@ function initPropChangeListener(){
 }
 
 //获取群组成员列表
-function GetGroupMemberList(group_id){
-    return new Promise( (resolve) => {
+async function GetGroupMemberList(group_id){
+    return new Promise( async (resolve) => {
         var url = g_ws_host + "/api/"
         option = {
             "action":"get_group_member_list", 
@@ -135,8 +134,9 @@ function GetGroupMemberList(group_id){
                 "group_id": group_id
             }
         }
-        SocketRequest(url, option, false, async function(event){
+        await SocketRequest(url, option, false, async function(event){
             res = JSON.parse(event.data);
+            console.log(res.data[0].group_id + " len:" + res.data.length);
             if(res.status == "ok")
                 await QQ_db.group_member_list.bulkPut(res.data).catch(Dexie.BulkError, function (e) {
                     console.error ("Some group_member_list did not succeed. However, " +
@@ -239,26 +239,33 @@ function ShowGroupList(){
 async function ShowChatList(){
     var parent = $("#contact_list");
     var elem = parent.children("li:first");
-    
-    var group_id_list = await QQ_db.message.where("group_id").above(-1).uniqueKeys();
-    len = group_id_list.length;
+    var sessions = await QQ_db.recent_session.orderBy('msg_item.time').reverse().toArray();
+    var len = sessions.length;
+    console.log('session len = ' + len)
     t = new Date();
     if(len > 0){
         parent.html("");
+        var name = '';
+        var id = 0;
         for(i = 0; i < len; i++){
-            var id = group_id_list[i];
-            var group = await QQ_db.group_list.get({group_id:id});
-            var latest_time = -1;
-            await QQ_db.message.where({group_id:id}).each(message => {
-                latest_time = Math.max(message.time, latest_time);
-            });
-            if(group != undefined){
-                elem.html(group.group_name + '<a class ="badge"></a>');
-                elem.attr("contact_type", "group");
-                elem.attr("contact_id", id);
-                elem.attr("title", (new Date(latest_time*1000)).toTimeString().substr(0,8));
-                parent.append(elem.clone());
+            console.log(i + " " + sessions[i].type_and_id);
+            var item = sessions[i].msg_item;
+            if(item.message_type == "group"){
+                var group = await QQ_db.group_list.get({group_id: item.group_id});
+                name = group.group_name;
+                id = group.group_id;
             }
+            if(item.message_type == 'private'){
+                var friend = await QQ_db.friend_list.get({user_id: item.user_id});
+                name = friend.remark;
+                id = friend.user_id;
+            }
+            console.log("chat:"+name);
+            elem.html(name + '<a class ="badge"></a>');
+            elem.attr("contact_type", item.message_type);
+            elem.attr("contact_id", String(id));
+            elem.attr("title", (new Date(item.time*1000)).toTimeString().substr(0,8));
+            parent.append(elem.clone());
         }
     }
     ShowUnreadMsgNum();
@@ -297,8 +304,15 @@ function ShowUnreadMsgNum(){
         var contact_type = $(this).attr('contact_type');
         var contact_id_str = $(this).attr('contact_id');
         var id = parseInt(contact_id_str);
+        if(contact_type == "private"){
+            var cnt = await QQ_db.message_unread.where({message_type:'private', user_id: id}).count();
+            var txt = "+" + String(cnt);
+            if(cnt <= 0)
+                txt = "";
+            var elem = $(`.rel-item[contact_id="${contact_id_str}"]`).find('.badge');
+            elem.html(txt);
+        }
         if(contact_type == "group"){
-
             var cnt = await QQ_db.message_unread.where({group_id: id}).count();
             var txt = "+" + String(cnt);
             if(cnt <= 0)
@@ -306,6 +320,7 @@ function ShowUnreadMsgNum(){
             var elem = $(`.rel-item[contact_id="${contact_id_str}"]`).find('.badge');
             elem.html(txt);
         }
+
     })
 }
 
@@ -318,9 +333,6 @@ function ScrollToBottom(){
 
 // 开始聊天
 async function StartChat(message_type = str, id = int){
-    g_curr_seccion.type = type;
-    g_curr_seccion.id = id;
-
     //加载历史消息
     $("#msgs").children("div:gt(2)").remove(); //不删除前两个元素
     //$("#msgs").attr("hidden", true);
@@ -342,9 +354,9 @@ async function StartChat(message_type = str, id = int){
         });
         g_curr_seccion.group_members = members;
         var iter = {cnt:0}
-        var resCollection = QQ_db.message.where({group_id:id});
+        var resCollection = QQ_db.message_unread.where({group_id:id});
         var cnt = await resCollection.count();
-        resCollection = resCollection.offset(cnt - 200);
+        //resCollection = resCollection.offset(cnt - 200);
         await resCollection.each( (msg, cursor) => {
             var str_id = String(msg.user_id);
             var user_remark = members[str_id].remark;
@@ -375,6 +387,8 @@ async function StartChat(message_type = str, id = int){
         //     AddMsg(msg.user_id, msg.message, user_remark);
         // });
     }
+    g_curr_seccion.type = type;
+    g_curr_seccion.id = id;
 }
 
 // 发送信息
@@ -483,12 +497,27 @@ function OnEvent(data){
 }
 
 //处理聊天消息
-function OnMessage(data){
+async function OnMessage(data){
     delete data.sender; //sender信息无需每次都保存。
 
+    //
     QQ_db.message.put(data);
     QQ_db.message_unread.put(data);
+    var type_and_id = data.message_type + "_";
+    if(data.message_type == 'private')
+        type_and_id += String(data.user_id);
+    if(data.message_type == 'group')
+        type_and_id += String(data.group_id);
+    if(data.message_type == 'discuss')
+        type_and_id += String(data.discuss_id);
+    //await QQ_db.recent_session.where({type_and_id:type_and_id}).delete();
+    QQ_db.recent_session.put({
+        type_and_id: type_and_id,
+        msg_item: data
+    })
+    //type_and_id, latest_time, user_id, group_id, message_type, latest_msg, latest_msg_id
 
+    //将消息添加到当前聊天窗口
     if(data.message_type == g_curr_seccion.type){
         if(data.message_type == "private" && data.user_id == g_curr_seccion.id){
             AddMsg(data.user_id, data.message, 
@@ -505,6 +534,7 @@ function OnMessage(data){
                 g_curr_seccion.group_members[str_id].remark, data.time, true);
         }
     }
+    ShowUnreadMsgNum();
 
     //debug
     var str = ""
@@ -516,6 +546,18 @@ function OnMessage(data){
     new_date.setTime(data.time*1000);
     console.log(new_date.toLocaleTimeString() + " " + data.post_type);
     console.log(str + " " +data.message);
+
+}
+
+function OnPrivateMessage(){
+
+}
+
+function OnGroupMessage(){
+
+}
+
+function OnDiscussMessage(){
 
 }
 
