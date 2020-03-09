@@ -48,7 +48,7 @@ $(document).ready( function(){
         g_my_account = message.data.user_id;
         g_my_nickname = message.data.nickname;
         $("title").html(g_my_nickname);
-        await OpenDB("QQ_" + String(g_my_account));
+        await OpenDB("QQ_v2_" + String(g_my_account));
         Init();
     });
 });
@@ -134,13 +134,13 @@ async function GetGroupMemberList(group_id){
                 "group_id": group_id
             }
         }
-        await SocketRequest(url, option, false, async function(event){
+        SocketRequest(url, option, false, async function(event){
             res = JSON.parse(event.data);
-            console.log(res.data[0].group_id + " len:" + res.data.length);
+            //console.log(res.data[0].group_id + " len:" + res.data.length);
             if(res.status == "ok")
-                await QQ_db.group_member_list.bulkPut(res.data).catch(Dexie.BulkError, function (e) {
-                    console.error ("Some group_member_list did not succeed. However, " +
-                       String(res.data.length-e.failures.length) + " group_member_list was added successfully");
+                res.data.forEach(x => {delete x.group_id});
+                await QQ_db.group_list.update(group_id, {members: res.data}).catch(function (e) {
+                    console.error("Group_member did not succeed.");
                 });
             resolve();
         });
@@ -344,26 +344,27 @@ async function StartChat(message_type = str, id = int){
         //await GetGroupMemberList(id);
         filter = {group_id:id};
         //获取群成员昵称
-        var members = {};
-        await QQ_db.group_member_list.where({group_id: id}).each( (user) => {
+        var idToRemark = {};
+        ( await QQ_db.group_list.get({group_id: id}) ).members
+        .forEach(user =>{
             var str_id = String(user.user_id);
             if(user.card == "")
-                members[str_id] = {remark: user.nickname}
+                idToRemark[str_id] = {remark: user.nickname}
             else
-                members[str_id] = {remark: user.card}
+                idToRemark[str_id] = {remark: user.card}
         });
-        g_curr_seccion.group_members = members;
+        g_curr_seccion.group_members = idToRemark;
         var iter = {cnt:0}
         var resCollection = QQ_db.message_unread.where({group_id:id});
-        var cnt = await resCollection.count();
+        //var cnt = await resCollection.count();
         //resCollection = resCollection.offset(cnt - 200);
         await resCollection.each( (msg, cursor) => {
             var str_id = String(msg.user_id);
-            var user_remark = members[str_id].remark;
+            var user_remark = idToRemark[str_id].remark;
             AddMsg(msg.user_id, msg.message, user_remark, msg.time);
-            iter.cnt += 1;
+            //iter.cnt += 1;
             //if(iter.cnt % 10 == 0)
-                ScrollToBottom();
+            ScrollToBottom();
         });
         //ScrollToBottom();
         //$("#msgs").attr("hidden", false);
