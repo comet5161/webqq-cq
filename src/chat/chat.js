@@ -10,6 +10,9 @@ var g_curr_seccion = { //当前会话
     user_remark: ''
 }
 
+var g_div_msg_robot = undefined;
+var g_div_msg_guest = undefined;
+
 //创建新的webSocket连接
 function SocketRequest(url, option, forever = false, getResponse = function(res){}){
     return new Promise( (resolve) =>{
@@ -26,6 +29,7 @@ function SocketRequest(url, option, forever = false, getResponse = function(res)
         }
 
         socket.onerror = function(){
+            getResponse("{status:'error'}");
             if(forever == false)
                 socket.close();
             else
@@ -39,6 +43,9 @@ function SocketRequest(url, option, forever = false, getResponse = function(res)
 // 窗体事件
 
 $(document).ready( function(){
+
+    g_div_msg_robot = $('#msg_robot').clone();
+    g_div_msg_guest = $('#msg_guest').clone();
 
     var url = g_ws_host + '/api/';
     //获取登陆信息
@@ -62,13 +69,15 @@ window.onbeforeunload = function(){
 //初始化
 async function Init(){
 
-    ShowChatList();
+
+
+    await ShowChatList();
     initMouseListener();
 
     var url = g_ws_host + "/api/"
     //获取分组好友
     option = {"action":"_get_friend_list"}
-    await SocketRequest(url, option, false, function(event){
+    SocketRequest(url, option, false, function(event){
         var res = JSON.parse(event.data);
         if(res.status == "ok")
             QQ_db.friend_group_list.bulkPut(res.data).catch(Dexie.BulkError, function (e) {
@@ -80,7 +89,7 @@ async function Init(){
 
     //获取所有好友
     option = {"action":"get_friend_list"}
-    await SocketRequest(url, option, false, function(event){
+    SocketRequest(url, option, false, function(event){
         var res = JSON.parse(event.data);
         if(res.status == "ok")
             QQ_db.friend_list.bulkPut(res.data).catch(Dexie.BulkError, function (e) {
@@ -92,26 +101,29 @@ async function Init(){
 
     //获取群组
     option = {"action":"get_group_list"}
-    await SocketRequest(url, option, false, function(event){
+    SocketRequest(url, option, false, async function(event){
         var res = JSON.parse(event.data);
-        if(res.status == "ok"){
-             //获取所有群组的群成员
-            for(i = 0, len = res.data.length; i < len; i++){
-                GetGroupMemberList(res.data[i].group_id);
-            }           
+        if(res.status == "ok"){          
             //保存到数据库
             QQ_db.group_list.bulkPut(res.data).catch(Dexie.BulkError, function (e) {
                 //console.log(res.data);
                 console.error ("Some group_list did not succeed. However, " +
                    String(res.data.length-e.failures.length) + " group_list was added successfully");
             });
+             //获取所有群组的群成员
+/*            for(i = 0, len = res.data.length; i < len; i++){
+                console.time('time_for_get_group_members');
+                await GetGroupMemberList(res.data[i].group_id);
+                console.timeEnd('time_for_get_group_members');
+            } */
+            
         }
     });
 
 
     //监听消息事件,获取消息
     url = g_ws_host + '/event/';
-    await SocketRequest(url, "", true, function(event){
+    SocketRequest(url, "", true, function(event){
         OnEvent(JSON.parse(event.data))
     });
 
@@ -130,7 +142,6 @@ async function GetGroupMemberList(group_id){
         option = {
             "action":"get_group_member_list", 
             "params":{
-
                 "group_id": group_id
             }
         }
@@ -138,11 +149,32 @@ async function GetGroupMemberList(group_id){
             res = JSON.parse(event.data);
             //console.log(res.data[0].group_id + " len:" + res.data.length);
             if(res.status == "ok")
-                res.data.forEach(x => {delete x.group_id});
+                //res.data.forEach(x => {delete x.group_id});
                 await QQ_db.group_list.update(group_id, {members: res.data}).catch(function (e) {
                     console.error("Group_member did not succeed.");
+                    resolve();
                 });
             resolve();
+        });
+    });
+}
+
+//获取陌生人信息
+async function GetStrangerInfo(user_id){
+    return new Promise( (resolve) => {
+        var url = g_ws_host + "/api/"
+        option = {
+            "action":"get_stranger_info", 
+            "params":{
+                "user_id": user_id
+            }
+        }
+        SocketRequest(url, option, false, function(event){
+            res = JSON.parse(event.data);
+            if(res.status == "ok")
+                resolve(res.data);
+            else
+                resolve({nickname: '[id:' + String(user_id) + ']'});
         });
     });
 }
@@ -173,6 +205,10 @@ function initMouseListener(){
     $("#pnl-tabs").on( 'click', 'div', function(){
         SelectPanel($(this).attr('id'));
     });
+
+    //加载更多消息
+    $('#histStart').attr('hidden', true);
+    $('#histStart').click(e => {ShowMoreMessage()});
 }
 
 function SelectPanel(id){
@@ -241,14 +277,12 @@ async function ShowChatList(){
     var elem = parent.children("li:first");
     var sessions = await QQ_db.recent_session.orderBy('msg_item.time').reverse().toArray();
     var len = sessions.length;
-    console.log('session len = ' + len)
     t = new Date();
     if(len > 0){
         parent.html("");
         var name = '';
         var id = 0;
         for(i = 0; i < len; i++){
-            console.log(i + " " + sessions[i].type_and_id);
             var item = sessions[i].msg_item;
             if(item.message_type == "group"){
                 var group = await QQ_db.group_list.get({group_id: item.group_id});
@@ -260,7 +294,6 @@ async function ShowChatList(){
                 name = friend.remark;
                 id = friend.user_id;
             }
-            console.log("chat:"+name);
             elem.html(name + '<a class ="badge"></a>');
             elem.attr("contact_type", item.message_type);
             elem.attr("contact_id", String(id));
@@ -326,22 +359,35 @@ function ShowUnreadMsgNum(){
 
 function ScrollToBottom(){
     var pnl = $("#pnl_show");
+    //$("#pnl_msgs").children('div:last').scrollIntoView();
     //pnl.css("overflow-x", "scroll");
     pnl.scrollTop(pnl[0].scrollHeight);
+    //msgs_unread.scrollIntoView();
+    //msgs_unread.click();
+    //msgs_end.click();
     //pnl.scrollTo("100%");
 }
 
 // 开始聊天
 async function StartChat(message_type = str, id = int){
     //加载历史消息
-    $("#msgs").children("div:gt(2)").remove(); //不删除前两个元素
-    //$("#msgs").attr("hidden", true);
-    var pnl = $('#msgs');
-    //pnl.animate({scrollTop:pnl.height()}, 500);
-    pnl.on("resize", ScrollToBottom);
+    $("#pnl_msgs").html(''); 
+    $('#histStart').attr('hidden', true);
+    g_curr_seccion.type = type;
+    g_curr_seccion.id = id;
+    await ShowMessage(message_type, id);
+    $('#histStart').attr('hidden', false);
+}
+
+async function ShowMessage(message_type = undefined, id = undefined){
+    //$('#pnl_msgs').css('overflow', 'hidden');//关闭滚动条
+    //$('#pnl_show').css('overflow', 'hidden');//关闭滚动条
+    //$('.msg').css('overflow', 'hidden');//关闭滚动条
+    //$("#pnl_msgs").attr("hidden", true);
     filter = {message_type: message_type};
+    var cnt = 0;
     if(message_type == "group"){
-        //await GetGroupMemberList(id);
+        await GetGroupMemberList(id);
         filter = {group_id:id};
         //获取群成员昵称
         var idToRemark = {};
@@ -355,19 +401,25 @@ async function StartChat(message_type = str, id = int){
         });
         g_curr_seccion.group_members = idToRemark;
         var iter = {cnt:0}
-        var resCollection = QQ_db.message_unread.where({group_id:id});
-        //var cnt = await resCollection.count();
+        var resCollection = QQ_db.message.where({group_id:id}).reverse().limit(200);
+        msgs_ary = await GetNextMsgPage(message_type, id);
+        cnt = msgs_ary.length;
         //resCollection = resCollection.offset(cnt - 200);
-        await resCollection.each( (msg, cursor) => {
+        msgs_ary.forEach( (msg) => {
             var str_id = String(msg.user_id);
-            var user_remark = idToRemark[str_id].remark;
-            AddMsg(msg.user_id, msg.message, user_remark, msg.time);
-            //iter.cnt += 1;
-            //if(iter.cnt % 10 == 0)
+            let user_remark = "[id:" + str_id + "] ";
+            if(idToRemark[str_id] != undefined)
+                user_remark = idToRemark[str_id].remark;
+            else{
+/*                let res = await GetStrangerInfo(msg.user_id);
+                user_remark = res.nickname;
+                idToRemark[str_id] = {remark:user_remark};*/
+            }
+            AddMsgPrepend(msg.user_id, msg.message, user_remark, msg.time);
             ScrollToBottom();
         });
-        //ScrollToBottom();
-        //$("#msgs").attr("hidden", false);
+        ScrollToBottom();
+        //$("#pnl_msgs").attr("hidden", false);
     }
     else if(message_type == "private"){
         filter.user_id = id;
@@ -375,7 +427,7 @@ async function StartChat(message_type = str, id = int){
         g_curr_seccion.user_remark = user_remark;
         var resCollection = QQ_db.message.where(filter);
         var cnt = await resCollection.count();
-        resCollection = resCollection.offset(cnt - 200); //只获取最新的1000个消息
+        resCollection = resCollection.offset(cnt - 1000); //只获取最新的1000个消息
         resCollection.each( msg => {
             AddMsg(msg.user_id, msg.message, user_remark, msg.time);
             ScrollToBottom();
@@ -388,8 +440,26 @@ async function StartChat(message_type = str, id = int){
         //     AddMsg(msg.user_id, msg.message, user_remark);
         // });
     }
-    g_curr_seccion.type = type;
-    g_curr_seccion.id = id;
+    //$('#pnl_msgs').css('overflow', 'auto');//恢复滚动条
+}
+
+
+async function ShowMoreMessage(){
+    msgs_ary = await GetNextMsgPage();
+    cnt = msgs_ary.length;
+    let idToRemark = g_curr_seccion.group_members;
+    msgs_ary.forEach((msg) => {
+        var str_id = String(msg.user_id);
+        let user_remark = "[id:" + str_id + "] ";
+        if(idToRemark[str_id] != undefined)
+            user_remark = idToRemark[str_id].remark;
+        else{
+/*                let res = await GetStrangerInfo(msg.user_id);
+            user_remark = res.nickname;
+            idToRemark[str_id] = {remark:user_remark};*/
+        }
+        AddMsgPrepend(msg.user_id, msg.message, user_remark, msg.time);
+    });
 }
 
 // 发送信息
@@ -415,7 +485,7 @@ function SendMsgDispose(detail)
 }
 
 // 增加信息
-function AddMsg(user_id, content, user_remark, timeStm, isLatest = false)
+function AddMsg(user_id, content, user_remark, timeStm, isUnread = false)
 {
     var t = new Date(timeStm*1000 + 8*3600*1000); //转换成北京时间
     str_time = t.toJSON().substr(0, 19).replace('T', ' ');
@@ -423,23 +493,37 @@ function AddMsg(user_id, content, user_remark, timeStm, isLatest = false)
     user_remark += ' [' + str_time + ']';
 
     content = parseCQ(content);
-    var msg = CreadMsg(user_id, content, user_remark);
-    if(isLatest)
+    var msg = CreateMsg(user_id, content, user_remark);
+    if(isUnread)
         msg.attr("read", false);
-    $("#msgs").append(msg.clone());
-    //$("#msgs").prepend(msg.clone()); //在子元素头部添加
+    $("#pnl_msgs").append(msg.clone());
+    //$("#pnl_msgs").prepend(msg.clone()); //在子元素头部添加
+}
+
+// 在最前面增加信息
+function AddMsgPrepend(user_id, content, user_remark, timeStm)
+{
+    var t = new Date(timeStm*1000 + 8*3600*1000); //转换成北京时间
+    str_time = t.toJSON().substr(0, 19).replace('T', ' ');
+    //str_time = str_time.substr(0, 10) + " " + str_time.substr(11, 8); 
+    user_remark += ' [' + str_time + ']';
+
+    content = parseCQ(content);
+    var msg = CreateMsg(user_id, content, user_remark);
+    //$("#pnl_msgs").append(msg.clone());
+    $("#pnl_msgs").prepend(msg.clone()); //在子元素头部添加
 }
 
 // 生成内容
-function CreadMsg(user_id, content, user_remark)
+function CreateMsg(user_id, content, user_remark)
 {
     parent = $("#msg_list")
-    var elem = ""
+    let elem = ""
     img_url = 'http://q.qlogo.cn/headimg_dl?dst_uin=' + String(user_id) + '&spec=100';
     img_style = `url(${img_url})`;
     if(user_id == g_my_account)
     {
-        elem = $("#msg_guest").clone();
+        elem = g_div_msg_guest.clone();
         elem.find(".msg-ball").html(content);
         elem.find(".msg-right").attr("user_remark", user_remark);
         elem.find(".msg-host").css("background-image", img_style);
@@ -449,7 +533,7 @@ function CreadMsg(user_id, content, user_remark)
     }
     else
     {
-        elem = $("#msg_robot") .clone()
+        elem = g_div_msg_robot.clone()
         elem.find(".msg-ball").html(content); 
         elem.find(".msg-left").attr("user-remark", user_remark)
         //elem.attr("id", "msg_robot_display"); 
