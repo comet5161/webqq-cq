@@ -750,7 +750,7 @@ to {
 	z-index:1000
 }
 .msg {
-	padding:.3em .3em;
+	/*padding:.3em .3em;*/
 }
 .msg-host {
 	top:.5em;

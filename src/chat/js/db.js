@@ -3,6 +3,7 @@
 
 var QQ_db_name = "";
 var QQ_db = {};
+var myDB = {};
 const PAGE_SIZE = 100;
 
 async function OpenDB(name){
@@ -72,15 +73,68 @@ async function OpenDB(name){
       });
       console.log("transaction finished!")*/
 
+      OpenWebDB();
+
       console.log('Load DB complete!');
 }
+
+function OpenWebDB(){
+  //建库
+  myDB = window.openDatabase("QQ_1634638631.db","1.0","QQ消息记录",1024*1024*1024);
+
+/*  myDB.transaction( tr =>{
+    tr.executeSql('drop table message');
+  })*/
+
+  //创表
+  myDB.transaction(function(tr){
+    tr.executeSql("create table  IF NOT EXISTS message(\
+      id Integer primary key autoincrement,\
+      chat_id INT8 not null,\
+      time INT8 not null,\
+      msg_json text not null,\
+      UNIQUE (chat_id, time, msg_json) ON CONFLICT IGNORE\
+      )");
+  }, )
+  //创建索引
+  myDB.transaction( tr=>{
+    tr.executeSql('crate index if not EXISTS message_index ON message (time, chat_id)');
+  })                     
+
+
+//添加：
+/*
+  myDB.transaction(tr=>{
+    tr.executeSql("insert into message(chat_id, time, msg_json) values(?, ?, ?)",[3,444,'{}']);
+    tr.executeSql("insert into message(chat_id, time, msg_json) values(?, ?, ?)",[4,555,'{}']);
+  });
+
+  QQ_db.message.toArray(ary => {
+    myDB.transaction(tr=>{
+      ary.forEach(msg=>{
+        if(msg.id %  100 == 0)
+          console.log('id = ' + msg.id);
+        else
+          return;
+        chat_id = GetChatId(msg);
+        tr.executeSql("insert into message(chat_id, time, msg_json) values(?, ?, ?)",
+          [chat_id, msg.time, JSON.stringify(msg)]);
+        
+      })
+    });
+  })*/
+
+}
+
+
+
 
 async function GetGroupMemberCard(group_id, user_id){
 
 }
 
 
-let db_keys_id = 0;
+/*let db_keys_id = 0;
 let db_msg_keys = undefined;
 async function GetNextMsgPage(message_type = undefined, id = undefined){
   filters = {
@@ -101,5 +155,63 @@ async function GetNextMsgPage(message_type = undefined, id = undefined){
     res.push(await QQ_db.message.get(key));
   }
   return res;
+}*/
+
+let db_keys_id = 0;
+let db_msg_keys = undefined;
+async function GetNextMsgPage(message_type = undefined, id = undefined){
+  chat_id = GetChatId({message_type: message_type, user_id: id, group_id: id, discuss_id: id});
+  console.time('get chat_id array');
+  if(message_type != undefined){
+    db_keys_id = 0
+    db_msg_keys = await new Promise( resolve => {
+      myDB.readTransaction( transaction => {
+          transaction.executeSql('SELECT id FROM message WHERE chat_id=? ORDER BY time DESC', [chat_id], 
+            (tr,result) => {
+              let ary = Array();
+              let len = result.rows.length;
+              for(let i = 0; i < len; i++)
+                ary.push(result.rows.item(i).id);
+              resolve(ary);
+            }, 
+            (tx,error) => {resolve()}
+          ); 
+      });
+    })
+  }
+  console.timeEnd('get chat_id array')
+
+  let res = Array();
+  console.time('get a page msg');
+  let start = db_keys_id;
+  let end = start + PAGE_SIZE;
+  res = await GetMessageByIdAry(db_msg_keys.slice(start, end));
+  db_keys_id = end;
+  console.timeEnd('get a page msg');
+  return res;
 }
 
+function GetMessageByIdAry(idAry){
+  let res = Array();
+  return new Promise(resolve => {
+    let len = idAry.length;
+    myDB.readTransaction(tr => {
+      for(let i = 0; i < len; i++)
+      {
+        tr.executeSql('SELECT msg_json FROM message where id=?;', [idAry[i]], 
+          (tr, result) => { 
+            res.push( JSON.parse(result.rows.item(0).msg_json) ); 
+            if(res.length == len)
+              resolve(res);
+          },
+          (tr, error) => {
+            res.push(undefined);
+            if(res.length == len)
+              resolve(res);
+          }
+        )
+      
+      }
+    });
+  });
+}

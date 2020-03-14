@@ -448,6 +448,8 @@ async function ShowMoreMessage(){
     msgs_ary = await GetNextMsgPage();
     cnt = msgs_ary.length;
     let idToRemark = g_curr_seccion.group_members;
+    let first_msg = $('#pnl_msgs').children(':first');
+    let offset = $('#pnl_show').offset().top - $('#histStart').offset().top
     msgs_ary.forEach((msg) => {
         var str_id = String(msg.user_id);
         let user_remark = "[id:" + str_id + "] ";
@@ -460,6 +462,9 @@ async function ShowMoreMessage(){
         }
         AddMsgPrepend(msg.user_id, msg.message, user_remark, msg.time);
     });
+    //let padding_top = parseInt( $('#pnl_show').css('padding').split(' ')[0] );
+    let top = first_msg.position().top - $('#histStart').height() + offset;
+    $('#pnl_show').scrollTop(top);
 }
 
 // 发送信息
@@ -581,9 +586,24 @@ function OnEvent(data){
         OnRequest(data);
 }
 
+function GetChatId(msg = {message_type:'', user_id:0, group_id:0, discuss_id:0}){
+    if(msg.message_type == 'private')
+        return 1e15 + msg.user_id;
+    if(msg.message_type == 'group')
+        return 2e15 + msg.group_id;
+    if(msg.message_type == 'discuss')
+        return 3e15 + msg.discuss_id;
+}
+
 //处理聊天消息
 async function OnMessage(data){
     delete data.sender; //sender信息无需每次都保存。
+
+    let chat_id = GetChatId(data);
+    myDB.transaction(tr=>{
+        tr.executeSql("insert into message(chat_id, time, msg_json) values(?, ?, ?)",
+            [chat_id, data.time, JSON.stringify(data)]);
+    });
 
     //
     QQ_db.message.put(data);
