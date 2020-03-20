@@ -1790,6 +1790,9 @@ body {
 	background-color:#484a4b;
 	-webkit-box-shadow:0 3px 10px -1px rgba(123,121,129,0.2);
 	box-shadow:0 3px 10px -1px rgba(123,121,129,0.2);
+    display: table-cell;
+    vertical-align: middle;
+    width: inherit;
 }
 .pnl-opt,.pnl-about {
 	font-size:1.8em;
@@ -2874,6 +2877,11 @@ ul,li {
 	list-style:none;
 	margin:0;
 	padding:0
+}
+#chat_title {
+	font-size: large;
+	color: white;
+	text-indent: 1em;
 }
 .slider {
 	position:relative;
