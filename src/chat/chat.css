@@ -1924,7 +1924,7 @@ body {
 	-webkit-box-sizing:border-box;
 	-moz-box-sizing:border-box;
 	box-sizing:border-box;
-	bottom:10em !important;
+	bottom:6em !important;
 	border-bottom:1px solid #c9cacb;
 	z-index:100000;
 	overflow:auto;
@@ -2045,7 +2045,7 @@ body {
 	border-radius:5px
 }
 .pnl-text {
-	height:10em;
+	height:6em;
 	z-index:100001 !important;
 	background:#fff;
 }
@@ -2103,8 +2103,8 @@ body {
 	color:#afafaf
 }
 .pnl-input {
-	top:2.12em !important;
-	bottom:2.5em !important;
+/*	top:0.8em !important;
+	bottom:0.8em !important;*/
 	padding:0;
 }
 .pnl-input>textarea {
@@ -2153,7 +2153,7 @@ body {
 	background-color:#ececec
 }
 .pnl-btn {
-	right:.5em !important;
+	right:.8em !important;
 	bottom:.5em !important;
 	color:#fff;
 	padding:.3em;
@@ -3049,7 +3049,7 @@ body.phone .media-container,body.ifr .media-container {
 	background-size:cover
 }
 .contaniner {
-	margin:20px 0 50px
+	margin:20px 0 20px
 }
 .pnl {
 	text-align:left;

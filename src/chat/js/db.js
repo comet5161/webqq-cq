@@ -4,12 +4,19 @@
 var myIdxDB_name = "";
 var myIdxDB = {};
 var myWebDB = {};
+var myWebDB_name = '';
 const PAGE_SIZE = 100;
+
+async function ExportIdxDB(){
+    const blob = await myIdxDB.export();
+    download(blob, "dexie-export-" + myIdxDb_name + ".json", "application/json");
+}
 
 async function OpenDB(name){
     //打开数据库
       //await Dexie.delete(name);
       myIdxDB = new Dexie(name);
+      myIdxDb_name = name;
 
     //这里的version是设计的数据库的版本号，不是数据库本身的版本号。
       
@@ -28,14 +35,6 @@ async function OpenDB(name){
         message_unread: '++id, time, group_id, [user_id+message_type]',
         message_grouping: "type_and_id" // messages = Array
       })
-
-
-/*      myIdxDB.version(3).stores({
-        message_private:'++id, time, group_id',
-        message_group:  '++id, time, group_id',
-        message_discuss:'++id, time, group_id',
-      })*/
-
 
       await myIdxDB.open().catch(Dexie.abortError, e => {
         console.error(e.message);
@@ -80,7 +79,9 @@ async function OpenDB(name){
 
 function OpenWebDB(){
   //建库
-  myWebDB = window.openDatabase("QQ_1634638631.db","1.0","QQ消息记录",1024*1024*1024);
+  
+  myWebDB_name = "QQ_" + g_my_account + '.db';
+  myWebDB = window.openDatabase(myWebDB_name,"1.0","QQ消息记录",1024*1024*1024);
 
 /*  myWebDB.transaction( tr =>{
     tr.executeSql('drop table message_favor');
@@ -119,41 +120,27 @@ function OpenWebDB(){
   }, );
 
 
+  myWebDB.transaction(function(tr){
+    tr.executeSql("create table  IF NOT EXISTS group_member_list(\
+      group_id Integer not null,\
+      user_id Integer not null,\
+      info_json text not null,\
+      primary key (group_id,user_id) ON CONFLICT REPLACE\
+      )");
+  }, );
+
   //创建索引
   myWebDB.transaction( tr=>{
     tr.executeSql('crate index if not EXISTS message_index ON message (time, chat_id)');
-  })                     
-
+  })     
 
 //添加：
 /*
   myWebDB.transaction(tr=>{
     tr.executeSql("insert into message(chat_id, time, msg_json) values(?, ?, ?)",[3,444,'{}']);
-    tr.executeSql("insert into message(chat_id, time, msg_json) values(?, ?, ?)",[4,555,'{}']);
   });
-
-  myIdxDB.message.toArray(ary => {
-    myWebDB.transaction(tr=>{
-      ary.forEach(msg=>{
-        if(msg.id %  100 == 0)
-          console.log('id = ' + msg.id);
-        else
-          return;
-        chat_id = GetChatId(msg);
-        tr.executeSql("insert into message(chat_id, time, msg_json) values(?, ?, ?)",
-          [chat_id, msg.time, JSON.stringify(msg)]);
-        
-      })
-    });
-  })*/
-
+*/
 }
-
-
-async function GetGroupMemberCard(group_id, user_id){
-
-}
-
 
 function GetMsgIds(chat_id){
     return new Promise( resolve => {
@@ -225,6 +212,49 @@ function GetMessageByIdAry(idAry){
   });
 }
 
+function GetGroupMemberList(group_id){
+    let aryMembers = Array();
+    return new Promise(resolve => {
+        myWebDB.readTransaction(tr => {
+            tr.executeSql('SELECT info_json FROM group_member_list where group_id=?;', 
+                [group_id], 
+                (tr, result) => {
+                    let len = result.rows.length;
+                    for(let i = 0; i < len; i++){
+                        let objInfo = JSON.parse( result.rows.item(i).info_json );
+                        aryMembers.push(objInfo);
+                    }
+                    resolve(aryMembers);
+                },
+                (tr, error) => {
+                    resolve();
+                }
+            )
+        });
+    });
+}
+
+function GetGroupMemberInfo(group_id, user_id){
+    return new Promise(resolve => {
+        myWebDB.readTransaction(tr => {
+            tr.executeSql('SELECT info_json FROM group_member_list where group_id=? and user_id=?;', 
+                [group_id, user_id], 
+                (tr, result) => {
+                    if(result.rows.length > 0){
+                        let objInfo = JSON.parse( result.rows.item(0).info_json );
+                        resolve(objInfo);
+                    }
+                    else
+                        resolve();
+                },
+                (tr, error) => {
+                    resolve();
+                }
+            )
+        });
+    });
+}
+
 async function CheckMessageBlocked(message){
   return new Promise(resolve => {
     myWebDB.readTransaction(tr => {
@@ -262,6 +292,28 @@ function SaveMessage(objMsg){
                   resolve();
               }
           );
+      });
+  });
+}
+
+function SaveGroupMemberList(aryMembers){
+  return new Promise(resolve => {
+      let chat_id = GetChatId(objMsg);
+      myWebDB.transaction(tr=>{
+        let len = aryMembers.length;
+        for(let i = 0; i < len; i++){
+            let obj = aryMembers[i];
+            tr.executeSql("insert into group_member_list(group_id, user_id, info_json) values(?, ?, ?)",
+                [obj.group_id, obj.user_id, JSON.stringify(obj)],
+                (tr, result) => {
+                    if(i == len-1)
+                        resolve();
+                },
+                (tr, error) =>{
+                    resolve();
+                }
+            );
+        }
       });
   });
 }

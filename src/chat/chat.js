@@ -119,7 +119,7 @@ async function Init(){
              //获取所有群组的群成员
 /*            for(i = 0, len = res.data.length; i < len; i++){
                 console.time('time_for_get_group_members');
-                await GetGroupMemberList(res.data[i].group_id);
+                await RequestGroupMemberList(res.data[i].group_id);
                 console.timeEnd('time_for_get_group_members');
             } */
             
@@ -142,7 +142,8 @@ function initPropChangeListener(){
 }
 
 //获取群组成员列表
-async function GetGroupMemberList(group_id){
+async function RequestGroupMemberList(group_id){
+    console.time('RequestGroupMemberList');
     return new Promise( async (resolve) => {
         var url = g_ws_host + "/api/"
         option = {
@@ -151,31 +152,30 @@ async function GetGroupMemberList(group_id){
                 "group_id": group_id
             }
         }
+        console.time('get_group_member_list');
         SocketRequest(url, option, false, async function(event){
+            console.timeEnd('get_group_member_list');
             res = JSON.parse(event.data);
-            //console.log(res.data[0].group_id + " len:" + res.data.length);
-            if(res.status == "ok")
+            if(res.status == "ok"){
                 //res.data.forEach(x => {delete x.group_id});
-                await myIdxDB.group_list.update(group_id, {members: res.data}).catch(function (e) {
-                    console.error("Group_member did not succeed.");
-                    resolve();
-                });
+                await SaveGroupMemberList(res.data);
+            }
+            console.timeEnd('RequestGroupMemberList');
             resolve();
         });
     });
 }
 
-async function GetGroupMemberNickname(group_id){
-        var idToRemark = {};
-        ( await myIdxDB.group_list.get({group_id: id}) ).members
-        .forEach(user =>{
+async function GetGroupMembersNickname(id){
+        var mapMembers = {};
+        ( await GetGroupMemberList(id) ).forEach(user =>{
             var str_id = String(user.user_id);
             if(user.card == "")
-                idToRemark[str_id] = {remark: user.nickname}
+                mapMembers[str_id] = {remark: user.nickname}
             else
-                idToRemark[str_id] = {remark: user.card}
+                mapMembers[str_id] = {remark: user.card}
         });
-    return idToRemark;
+    return mapMembers;
 }
 
 //获取陌生人信息
@@ -214,7 +214,9 @@ function initMouseListener(){
                 showFriendsInGroup(friend_group_elem);
             }
             else{
-                let title = $(this).html();
+                let elem = $(this).clone();
+                elem.find('.badge').remove();
+                let title = elem.html();
                 $("#chat_title").html(title);
                 StartChat(type, id);
             }
@@ -230,6 +232,32 @@ function initMouseListener(){
     //加载更多消息
     $('#histStart').attr('hidden', true);
     $('#histStart').click(e => {ShowMoreMessage()});
+
+    //清空未读消息
+    $('.badge').click( function(e){
+        let elem = $(this).parent();
+        let message_type = elem.attr('contact_type');
+        let id = parseInt( elem.attr('contact_id') );
+        ClearUnread(message_type, id);
+    })
+
+    //鼠标滚轮
+    $('#pnl_show').mousewheel(async function(event) {
+        if(g_curr_session.id > 0 && $('#pnl_msgs').attr('loading') != 'true')
+            if( event.deltaY > 0 && $(this).scrollTop()  == 0 ){
+                $('#pnl_msgs').attr('loading', 'true');
+                await ShowMoreMessage();
+                $('#pnl_msgs').attr('loading', 'false');
+            }
+        //console.log(event.deltaX, event.deltaY, event.deltaFactor);
+    });
+
+    //显示大图
+    $("#pnl_msgs").delegate('.msg-img', 'click', function(){  
+        var _this = $(this);//将当前的pimg元素作为_this传入函数  
+        imgShow("#outerdiv", "#innerdiv", "#bigimg", _this);  
+        console.log('click img');
+    });
 
     //消息框右键菜单
     $.contextMenu({
@@ -257,6 +285,11 @@ function initMouseListener(){
             /*"cut": {name: "Cut", icon: "cut"},*/
             /*"paste": {name: "Paste", icon: "paste"},*/
             "delete": {name: "删除", icon: "delete"},
+            'export': {name: "导出", 
+                callback: function(itemKey, opt, e){
+                    ExportIdxDB();
+                }
+            },
             "sep1": "---------",
             "quit": {name: "取消", icon: function(){
                 return 'context-menu-icon context-menu-icon-quit';
@@ -411,6 +444,16 @@ function ShowUnreadMsgNum(){
     })
 }
 
+async function ClearUnread(message_type = str, id = int){
+    if(message_type == 'group')
+        await myIdxDB.message_unread.where({message_type: message_type, group_id: id}).delete();
+    else if(message_type == 'private')
+        await myIdxDB.message_unread.where({message_type: message_type, user_id: id}).delete();
+    else if(message_type == 'discuss')
+        await myIdxDB.message_unread.where({message_type: message_type, discuss_id: id}).delete();
+    ShowUnreadMsgNum();
+}
+
 function ScrollToBottom(){
     var pnl = $("#pnl_show");
     //$("#pnl_msgs").children('div:last').scrollIntoView();
@@ -425,6 +468,7 @@ function ScrollToBottom(){
 
 // 开始聊天
 async function StartChat(message_type = str, id = int){
+    console.time('StartChat');
     //加载历史消息
     $("#pnl_msgs").html(''); 
     $('#histStart').attr('hidden', true);
@@ -438,67 +482,45 @@ async function StartChat(message_type = str, id = int){
     g_curr_session.id = id;
     g_curr_session.type_and_id = GetTypeAndIdStr(objMsg);
     g_curr_session.messages = {};
+    if(message_type == 'private')
+        g_curr_session.user_remark = ( await myIdxDB.friend_list.get({user_id: id}) ).remark;
+    else if(message_type == 'group'){
+        g_curr_session.group_members = await GetGroupMembersNickname(id); //获取群成员昵称
+        RequestGroupMemberList(id);
+    }
+
     await ShowMessage(message_type, id);
     $('#histStart').attr('hidden', false);
+
+    console.timeEnd('StartChat');
 }
 
 async function ShowMessage(message_type, id){
-    if(message_type == "group"){
-        await GetGroupMemberList(id);
-        var idToRemark = await GetGroupMemberNickname(id); //获取群成员昵称
-        g_curr_session.group_members = idToRemark;
-        msgs_ary = await GetNextMsgPage(message_type, id);
-        msgs_ary.forEach( (msg) => {
-            var str_id = String(msg.user_id);
-            msg.user_remark = "[id:" + str_id + "] ";
-            if(idToRemark[str_id] != undefined)
-                msg.user_remark = idToRemark[str_id].remark;
-            else{
-/*                let res = await GetStrangerInfo(msg.user_id);
-                user_remark = res.nickname;
-                idToRemark[str_id] = {remark:user_remark};*/
-            }
-            g_curr_session.messages[String(msg.id)] = msg;
-            AddMsgPrepend(CloneObj(msg));
-            ScrollToBottom();
-        });
+    msgs_ary = await GetNextMsgPage(message_type, id);
+    let len = msgs_ary.length;
+    for(let i = 0; i < len; i++)
+    {
+        let objMsg = msgs_ary[i];
+        objMsg.user_remark = await GetUserRemark(objMsg);
+        g_curr_session.messages[String(objMsg.id)] = objMsg;
+        AddMsgPrepend(CloneObj(objMsg));
         ScrollToBottom();
     }
-    else if(message_type == "private"){
-        var user_remark = ( await myIdxDB.friend_list.get({user_id: id}) ).remark;
-        g_curr_session.user_remark = user_remark;
-        msgs_ary = await GetNextMsgPage(message_type, id);
-        msgs_ary.forEach( (msg) => {
-            msg.user_remark = user_remark;
-            g_curr_session.messages[String(msg.id)] = msg;
-            AddMsgPrepend(CloneObj(msg));
-            ScrollToBottom();
-        });
-        ScrollToBottom();
-    }
-    else if(message_type == "discuss"){
-
-    }
-    //$('#pnl_msgs').css('overflow', 'auto');//恢复滚动条
+    ScrollToBottom();
 }
 
 
 async function ShowMoreMessage(){
     msgs_ary = await GetNextMsgPage();
     cnt = msgs_ary.length;
-    let idToRemark = g_curr_session.group_members;
+    let mapMembers = g_curr_session.group_members;
     let first_msg = $('#pnl_msgs').children(':first');
     let offset = $('#pnl_show').offset().top - $('#histStart').offset().top
     msgs_ary.forEach((msg) => {
         var str_id = String(msg.user_id);
         msg.user_remark = "[id:" + str_id + "] ";
-        if(idToRemark[str_id] != undefined)
-            msg.user_remark = idToRemark[str_id].remark;
-        else{
-/*                let res = await GetStrangerInfo(msg.user_id);
-            user_remark = res.nickname;
-            idToRemark[str_id] = {remark:user_remark};*/
-        }
+        if(mapMembers[str_id] != undefined)
+            msg.user_remark = mapMembers[str_id].remark;
         g_curr_session.messages[String(msg.id)] = msg;
         AddMsgPrepend(CloneObj(msg));
     });
@@ -552,9 +574,6 @@ function AddMsg(objMsg, isUnread = false, prepend = false)
         $("#pnl_msgs").append(msg);
     else
         $("#pnl_msgs").prepend(msg); //在子元素头部添加
-
-
-
 }
 
 // 在最前面增加信息
@@ -661,19 +680,14 @@ async function OnMessage(objMsg){
         msg_item: objMsg
     })
 
+    objMsg.user_remark = await GetUserRemark(objMsg);
     //将消息添加到当前聊天窗口
     if(type_and_id == g_curr_session.type_and_id){
-        objMsg.user_remark = String(objMsg.user_id);
-        if(objMsg.message_type == "private")
-            objMsg.user_remark = g_curr_session.user_remark;
-        else if(objMsg.message_type == "group" || objMsg.message_type == 'discuss'){
-            let str_id = String(objMsg.user_id);
-            let user = g_curr_session.group_members[str_id];
-            if(user != undefined)
-                objMsg.user_remark = user.remark;
-        } 
-        g_curr_session.messages[String(objMsg.id)] = objMsg;
-        AddMsg(CloneObj(objMsg), true);
+        g_curr_session.messages[String(objMsg.id)] = CloneObj(objMsg);
+        let isAtBottom = isScrollToBottom($("#pnl_show"))
+        AddMsg(objMsg, true);
+        if(isAtBottom)
+            ScrollToBottom();
     }
 
     //debug

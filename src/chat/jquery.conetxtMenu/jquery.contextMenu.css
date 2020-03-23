@@ -178,7 +178,7 @@
 .context-menu-list {
   position: absolute; 
   display: inline-block;
-  min-width: 13em;
+  min-width: 8em;
   max-width: 26em;
   padding: .25em 0;
   margin: .3em;
