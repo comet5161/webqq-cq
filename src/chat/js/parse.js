@@ -55,7 +55,9 @@ function parseCQ(msg = str){
 
     //face_html = '<img class = "msg-img" src="qqFace/emoj/e$1.gif" >';
     res = res.replace(/\[CQ:face,id=([\d]+)\]/g, function(src, emoj_id){
-        let id = parseInt(emoj_id) + 100;
+        let id = parseInt(emoj_id);
+        if(id < 100)
+            id += 100;
         return '<img class = "msg-img" src="qqFace/emoj/e' + id + '.gif" >'
     });
     return res;

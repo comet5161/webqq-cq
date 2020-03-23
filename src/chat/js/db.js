@@ -12,11 +12,11 @@ async function ExportIdxDB(){
     download(blob, "dexie-export-" + myIdxDb_name + ".json", "application/json");
 }
 
-async function OpenDB(name){
+async function OpenDB(){
     //打开数据库
       //await Dexie.delete(name);
-      myIdxDB = new Dexie(name);
-      myIdxDb_name = name;
+      myIdxDb_name = "QQ_v2_" + String(g_my_account);
+      myIdxDB = new Dexie(myIdxDb_name);
 
     //这里的version是设计的数据库的版本号，不是数据库本身的版本号。
       
@@ -159,25 +159,21 @@ function GetMsgIds(chat_id){
     })
 }
 
-
-let db_id_start = 0;
-let db_msg_ids = undefined;
-
 async function GetNextMsgPage(message_type = undefined, id = undefined){
   chat_id = GetChatId({message_type: message_type, user_id: id, group_id: id, discuss_id: id});
   console.time('get chat_id array');
   if(message_type != undefined){
-    db_id_start = 0
-    db_msg_ids = await GetMsgIds(chat_id);
+    g_curr_session.msg_id_start = 0
+    g_curr_session.msg_id_ary = await GetMsgIds(chat_id);
   }
   console.timeEnd('get chat_id array')
 
   let res = Array();
   console.time('get a page msg');
-  let start = db_id_start;
+  let start = g_curr_session.msg_id_start;
   let end = start + PAGE_SIZE;
-  res = await GetMessageByIdAry(db_msg_ids.slice(start, end));
-  db_id_start = end;
+  res = await GetMessageByIdAry(g_curr_session.msg_id_ary.slice(start, end));
+  g_curr_session.msg_id_start = end;
   console.timeEnd('get a page msg');
   return res;
 }
