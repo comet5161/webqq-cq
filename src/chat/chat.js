@@ -1,4 +1,4 @@
-﻿///////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////
 // 全局变量
 var g_my_account = -1;
 var g_my_nickname = ""
@@ -101,17 +101,17 @@ function initMouseListener(){
     $('#histStart').click(e => {ShowMoreMessage()});
 
     //清空未读消息
-    $('.badge').click( function(e){
+    $('.rel-item').delegate('.badge', 'click', function(e){
         let elem = $(this).parent();
         let message_type = elem.attr('contact_type');
         let id = parseInt( elem.attr('contact_id') );
         ClearUnread(message_type, id);
-    })
+    });
 
     //鼠标滚轮
     $('#pnl_show').mousewheel(async function(event) {
         if(g_curr_session.id > 0 && $('#pnl_msgs').attr('loading') != 'true')
-            if( event.deltaY > 0 && $(this).scrollTop()  == 0 ){
+            if( event.deltajY > 0 && $(this).scrollTop()  == 0 ){
                 $('#pnl_msgs').attr('loading', 'true');
                 await ShowMoreMessage();
                 $('#pnl_msgs').attr('loading', 'false');

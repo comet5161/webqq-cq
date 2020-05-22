@@ -1,7 +1,7 @@
 
 function WaitForJudge( judge, func, times, interval) {
     var _times = times || 100, //100次
-    _interval = interval || 30, //20毫秒每次 
+    _interval = interval || 50, //20毫秒每次 
     _iIntervalID; //定时器id
     if( judge() ){ //如果已经获取到了，就直接执行函数
         func && func.call();
@@ -20,14 +20,19 @@ function WaitForJudge( judge, func, times, interval) {
 }
 
 function BackupPage(){
-    let storage = window.localStorage;
-    let scrollTop = $('#pnl_show').scrollTop();
-    storage['scrollTop'] = scrollTop;
-    storage['scrollHeight'] = $('#pnl_show')[0].scrollHeight;
-    storage['curr_session'] = JSON.stringify(g_curr_session);
+    if(g_my_account > 0){
+        let storage = window.localStorage;
+        let scrollTop = $('#pnl_show').scrollTop();
+        storage['scrollTop'] = scrollTop;
+        storage['scrollHeight'] = $('#pnl_show')[0].scrollHeight;
+        storage['curr_session'] = JSON.stringify(g_curr_session);
 
-    //$('#pnl_show').ready(function(){$('#pnl_show').scrollTop(scrollTop);});
-    window.localStorage['html_body'] = $('body').html();
+        //$('#pnl_show').ready(function(){$('#pnl_show').scrollTop(scrollTop);});
+        window.localStorage['html_body'] = $('body').html();
+    }
+    else{
+        storage.clear();
+    }
 }
 
 function RestorePage(){
